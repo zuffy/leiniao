@@ -13,6 +13,7 @@
 	import flash.geom.Point;
 	import flash.geom.Matrix;
 	import flash.text.TextFormat;
+	import flash.display.SimpleButton;
 	
 	public class leiniao extends Sprite
 	{
@@ -23,7 +24,7 @@
 		private var _isGoRight:Boolean;
 		
 		private var _marks:int = 0;
-		private var	markBoard:MarksDis = new MarksDis;
+		private var	markBoard:MarksDis;
 
 
 		private var t1:Number = 0;
@@ -86,6 +87,7 @@
 			addChild(playerLayer)
 
 			startBtn = new StartBtn();
+			markBoard = new MarksDis();
 			startBtn.x = (stage.stageWidth - startBtn.width) * .5;
 			startBtn.y = (stage.stageHeight - startBtn.height) * .5;
 			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
@@ -124,6 +126,8 @@
 			state = "GAME";
 			startBtn.removeEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			stage.addEventListener(Event.ENTER_FRAME, loop);
+			markBoard.purseBtn.buttonMode = true;
+			markBoard.purseBtn.addEventListener(MouseEvent.CLICK, onPurse);
 			_dropLists = new Vector.<Drops>();
 			_dropsHolder = new Sprite();
 			addChild(_dropsHolder);			
@@ -133,6 +137,20 @@
 			bg.gotoAndPlay(2);
 			player.gotoAndPlay(2)
 			this.emptyBitmap = new BitmapData(stage.width,200,true,0);
+
+		}
+
+		private function onPurse(me:MouseEvent):void {
+			markBoard['purseBtn'].visible = false;
+			if(state == 'PAURSE'){
+				state = 'GAME';
+				markBoard['purseBtn'].gotoAndStop(1)
+			}
+			else if(state == 'GAME'){
+				state = 'PAURSE';
+				markBoard['purseBtn'].gotoAndStop(2)
+			}
+			markBoard['purseBtn'].visible = true;
 
 		}
 		
@@ -168,7 +186,7 @@
 					_isGoRight = true;
 					break;
 				case 32:
-					if(state != "GAME"){
+					if(state == "MENU"){
 						onStartBtnHandler();
 					}
 					break;
@@ -198,6 +216,7 @@
 			startBtn.visible = true;
 			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			playerEffectLayer.removeChild(effectBitmap)
+			state = 'MENU';
 		}
 
 		protected function onGameLoop():void

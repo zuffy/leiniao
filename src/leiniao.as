@@ -6,6 +6,13 @@
 	import flash.events.MouseEvent;
 	import flash.text.TextField;
 	import flash.utils.getTimer;
+	import flash.display.Bitmap;
+	import flash.display.BitmapData;
+	import flash.geom.ColorTransform;
+	import flash.geom.Rectangle;
+	import flash.geom.Point;
+	import flash.geom.Matrix;
+	import flash.text.TextFormat;
 	
 	public class leiniao extends Sprite
 	{
@@ -22,17 +29,33 @@
 		private var t1:Number = 0;
 		private var t2:Number = 0;
 		private var t3:Number = 0;
+		private var eff_duration:Number = 0;
+
 		private var genDropsDuration:Number = 1000;
 		// level
-		private var levelPoints:Array = [500, 1000, 2000]
+		private var levelPoints:Array = [500, 900, 1800]
 		private var speedRang:Array = [2.8, 2.4, 2, 1];
 		private var born_duration:Array = [600, 400, 300, 200]
-		private var born_speed:Array = [8, 10, 12.5, 15]
+		private var born_speed:Array = [6, 6.5, 7.5, 10]
+		private var move_speed:Array = [10, 12, 14, 16]
 		private var startDropDuration:Number = 0 	// 3s
 		private var curLevel:int = -1;
+		private var dx:Number = 10;
 
+
+		private var _dropLists:Vector.<Drops>;
+		private var _dropsHolder:Sprite;
+
+		private var v0:Number = 7.5;	// 初始平均速度
+		private var v_range:Number = 2.5 // 道具下落的差异速度
+
+		private var playerLayer:Sprite = new Sprite();
+		private var playerEffectLayer:Sprite = new Sprite();
+		private var effectBitmap:Bitmap;
 		private var state:String = "MENU";
 
+		private var txt:TextField = new TextField();
+		var ttt:TextFormat = new TextFormat();
 		public function leiniao()
 		{
 			init();
@@ -41,6 +64,10 @@
 		private function init():void {
 			initUI();
 			initPlayer();
+			ttt.size = 25;
+			ttt.color = 0xffffff;
+			txt.defaultTextFormat = ttt;
+			addChild(txt)
 		}
 		
 		private function initPlayer():void
@@ -48,17 +75,24 @@
 			// TODO Auto Generated method stub
 			player = new Player();
 			player.visible = false;
-			addChild(player);
+			playerLayer.addChild(player);
 		}
 		
 		private function initUI():void {
 			addChild(bg);
+			playerLayer = new Sprite();
+			playerEffectLayer = new Sprite();
+			addChild(playerEffectLayer)
+			addChild(playerLayer)
+
 			startBtn = new StartBtn();
 			startBtn.x = (stage.stageWidth - startBtn.width) * .5;
 			startBtn.y = (stage.stageHeight - startBtn.height) * .5;
 			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			addChild(startBtn);
-			
+			stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyDown);
+			stage.addEventListener(KeyboardEvent.KEY_UP,handleKeyUp);
+						
 			marks = 0;;
 			markBoard.x = 382.4;
 			addChild(markBoard);
@@ -66,6 +100,8 @@
 		
 		public function set marks(value:int):void {			
 			_marks = value;
+			trace(_marks)
+			txt.text = _marks+'';
 			markBoard.total.text = _marks + '';
 		}
 		
@@ -73,29 +109,31 @@
 			return _marks;
 		}
 		
-		private function onStartBtnHandler(event:MouseEvent):void
+		private function onStartBtnHandler(event:MouseEvent = null):void
 		{
 			// TODO Auto-generated method stub
 			curLevel = -1;
 			startBtn.visible = false;
 			player.visible = true;
-
-			player.x = (stage.stageWidth - startBtn.width) * .5;
-			player.y = (stage.stageHeight - startBtn.height) * .96;
+			_eff_elapse = 0;
+			player.x = (stage.stageWidth - player.width) * .5;
+			player.y = (stage.stageHeight - player.height) * .96;
 			
 			marks = 0;
 			startDropDuration = 1000;
 			state = "GAME";
 			startBtn.removeEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			stage.addEventListener(Event.ENTER_FRAME, loop);
-			stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyDown);
-			stage.addEventListener(KeyboardEvent.KEY_UP,handleKeyUp);
 			_dropLists = new Vector.<Drops>();
 			_dropsHolder = new Sprite();
-			addChild(_dropsHolder);
-
+			addChild(_dropsHolder);			
+			effectBitmap = new Bitmap(new BitmapData(stage.width,200,true,0));
+			effectBitmap.y = 200
+			playerEffectLayer.addChild(effectBitmap)
 			bg.gotoAndPlay(2);
 			player.gotoAndPlay(2)
+			this.emptyBitmap = new BitmapData(stage.width,200,true,0);
+
 		}
 		
 		protected function handleKeyUp(event:KeyboardEvent):void
@@ -113,18 +151,26 @@
 			}
 			event.updateAfterEvent();
 		}
-		
+
+		private var _eff_elapse:int = 0;
+
 		protected function handleKeyDown(event:KeyboardEvent):void
 		{
 			// TODO Auto-generated method stub
 			// _isGoRight = _isGoLeft = false;
 			switch(event.keyCode){
-				// <-
-				case 37:
+				case 37:	// <-
 					_isGoLeft = true;
+					_eff_elapse = 30;
 					break;
-				case 39:
+				case 39:	// ->
+					_eff_elapse = 30;
 					_isGoRight = true;
+					break;
+				case 32:
+					if(state != "GAME"){
+						onStartBtnHandler();
+					}
 					break;
 				default:break;
 			}
@@ -151,6 +197,7 @@
 			player.visible = false;
 			startBtn.visible = true;
 			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
+			playerEffectLayer.removeChild(effectBitmap)
 		}
 
 		protected function onGameLoop():void
@@ -160,6 +207,7 @@
 			t2 = getTimer() - t1;
 			t1 = getTimer();
 			t3 += t2
+			eff_duration += t2;
 			if(startDropDuration > 0){
 				if(t3 < startDropDuration) {
 					return;
@@ -181,18 +229,33 @@
 			updateDrops();
 			updateplayer();
 
+			if( _eff_elapse > 0 && eff_duration > 50){
+				updateEffect();
+				eff_duration = 0;
+				eff_elapse --;
+			}
+		}
+
+		private function set eff_elapse (value:int):void {
+			_eff_elapse = value
+			if(_eff_elapse == 0)
+			effectBitmap.bitmapData = emptyBitmap.clone();
+		}
+		
+		private function get eff_elapse():int{
+			return _eff_elapse;
 		}
 		
 		private function getDataFromMark(t_mark:int):Object {
 			var obj = {};
 			var level:int = 0;
-			if(t_mark > 2000){
+			if(t_mark > 1800){
 				level = 3;
 			}
 			else if(t_mark <= 500){
 				level = 0
 			}
-			else if(t_mark <= 1000){
+			else if(t_mark <= 900){
 				level = 1
 			}
 			else{
@@ -204,6 +267,8 @@
 			obj.du = born_duration[level];
 			obj.range = speedRang[level]
 			obj.dv = born_speed[level];
+			obj.ms = move_speed[level]
+			trace('leve up :'+ level)
 			return obj;
 		}
 
@@ -214,6 +279,7 @@
 			genDropsDuration = newData.du;
 			v_range = newData.range;
 			v0 = newData.dv;
+			dx = newData.ms
 		}
 		
 		private var addMark:AddMark
@@ -264,12 +330,6 @@
 			state = 'GAMEOVER';
 		}
 		
-		private var _dropLists:Vector.<Drops>;
-		private var _dropsHolder:Sprite;
-
-		private var v0:Number = 7.5;	// 初始平均速度
-		private var v_range:Number = 2.5 // 道具下落的差异速度
-
 		private function genDrops():void
 		{
 			// TODO Auto Generated method stub
@@ -282,7 +342,6 @@
 			_dropLists.push(drop);
 		}
 		
-		private var dx:Number = 15;
 		private function updateplayer():void
 		{
 			// TODO Auto Generated method stub
@@ -296,6 +355,22 @@
 			}
 			//	80 为人物宽度
 			player.x = Math.max(0, Math.min(player.x, 488 - 80));
+		}
+
+		//private var myColorTransform:ColorTransform = new ColorTransform(250, 255, 255, 0.5, 25, 187 , 250, 0);
+		private var myColorTransform:ColorTransform = new ColorTransform(250, 255, 255, .4, 0, 0, 187, 1);
+		private var canvas:BitmapData;
+		private var emptyBitmap:BitmapData;
+		private var rect:Rectangle = new Rectangle(0,0, 488, 200);
+		private var matrix:Matrix = new Matrix(1, 0, 0, 1, 0, -200);
+		private var p:Point = new Point(0,0)
+		private function updateEffect():void {
+			this.canvas = emptyBitmap.clone();
+			this.canvas.draw(effectBitmap.bitmapData, null, myColorTransform);
+			this.canvas.draw(playerLayer, matrix, myColorTransform);
+			effectBitmap.bitmapData.dispose();
+			effectBitmap.bitmapData = emptyBitmap.clone();
+			effectBitmap.bitmapData.copyPixels(canvas, rect, p)
 		}
 	}
 }

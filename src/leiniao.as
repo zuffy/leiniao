@@ -14,9 +14,14 @@
 	import flash.geom.Matrix;
 	import flash.text.TextFormat;
 	import flash.display.SimpleButton;
+	import flash.system.Security;
+	import flash.display.StageScaleMode;
+	import flash.external.ExternalInterface;
+	import flash.display.StageAlign;
+	import com.zuffy.model.PhotoModel;
+
 	
-	public class leiniao extends Sprite
-	{
+	public class leiniao extends Sprite	{
 		private var bg:BG = new BG();
 		private var startBtn:StartBtn;
 		private var player:Player;
@@ -53,30 +58,132 @@
 		private var playerLayer:Sprite = new Sprite();
 		private var playerEffectLayer:Sprite = new Sprite();
 		private var effectBitmap:Bitmap;
+
+		private const StageWidth:Number = 850;
+		private const StageHeight:Number = 474;
+
+
 		private var state:String = "MENU";
 
 		private var txt:TextField = new TextField();
 		var ttt:TextFormat = new TextFormat();
-		public function leiniao()
-		{
-			init();
+
+		public function leiniao() {
+			Security.allowDomain("*");  
+			Security.allowInsecureDomain("*");
+			if(stage){
+				init();
+			}
+			else {
+				addEventListener(Event.ADDED_TO_STAGE, init)
+			}
 			
 		}
-		private function init():void {
+		private function init(e:Event = null):void {
+			if(e){
+				removeEventListener(Event.ADDED_TO_STAGE, init)
+			}
+			stage.scaleMode = StageScaleMode.NO_SCALE;
+			stage.align = StageAlign.TOP_LEFT;
+			stage.tabChildren = false;
+			
+			initJS();
 			initUI();
-			initPlayer();
+			/* test
 			ttt.size = 25;
 			ttt.color = 0xffffff;
 			txt.defaultTextFormat = ttt;
-			addChild(txt)
+			//addChild(txt)
+			*/
 		}
 		
-		private function initPlayer():void
-		{
-			// TODO Auto Generated method stub
-			player = new Player();
-			player.visible = false;
-			playerLayer.addChild(player);
+		private function initJS():void {
+			if (ExternalInterface.available) {
+				ExternalInterface.addCallback('setParam', setParam);
+				ExternalInterface.addCallback('showShanePanel', showShanePanel);
+				ExternalInterface.addCallback('saveSnaptShoot', saveSnaptShoot);
+				ExternalInterface.addCallback('resetgame', resetgame);
+			}
+
+		}
+
+		private var uploadUrl:String = '';
+		private var gameStartCall:String;
+		private var gameOverCall:String;
+		private var startShare:String;
+		private var sharPanelCloseCall:String;		
+		private var snapUploadComplete:String;
+		private var logFunc:String;
+
+		private function setParam(obj:Object):void {
+			uploadUrl  = obj.uploadUrl  
+			gameStartCall = obj.gameStartCall
+			gameOverCall = obj.gameOverCall
+			sharPanelCloseCall = obj.sharPanelCloseCall
+			startShare = obj.startShare
+      snapUploadComplete = obj.snapUploadComplete
+			logFunc = obj.logFunc
+			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
+		}
+		
+		private var gameOverPanel:Panel;
+		private var sharComplete:Function;
+		private var isSharing:Boolean = false;
+		private function showShanePanel(score:String, times:String):void {
+			ExternalInterface.call(logFunc, '排名：'+score + '抽奖次数：'+times)
+			if(!gameOverPanel){
+				gameOverPanel = new Panel();
+				gameOverPanel.close.addEventListener(MouseEvent.CLICK, closePanel)
+				gameOverPanel.again.addEventListener(MouseEvent.CLICK, onStartBtnHandler)
+				addChild(gameOverPanel)
+				gameOverPanel.btndouban.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
+				gameOverPanel.btnsina.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
+				gameOverPanel.btnrenren.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
+				gameOverPanel.btntengxun.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
+
+				sharComplete = function __sharComplete(obj):void {
+					isSharing = false;
+					ExternalInterface.call('' + snapUploadComplete, obj)
+				}
+
+			}
+			gameOverPanel.visible = true;
+			gameOverPanel.snapShotArea.myScore.text = marks;
+			gameOverPanel.snapShotArea.myRank.text = score;
+			gameOverPanel.snapShotArea.timesDis.text = times;
+			gameOverPanel.x = (StageWidth - gameOverPanel.width) * .5;
+			gameOverPanel.y = (StageHeight - gameOverPanel.height) * .5;
+		}
+		private function shareRankBtnClickHandler(me:MouseEvent):void {
+			// ExternalInterface.call(logFunc,'' + me.target.name.slice(3))
+			if(isSharing){
+				return;
+			}
+			isSharing = true;
+			ExternalInterface.call(startShare, '' + me.target.name.slice(3))
+		}
+		private function closePanel(me:MouseEvent):void {
+			gameOverPanel.visible = false;
+			ExternalInterface.call(sharPanelCloseCall)
+		}
+		
+		private function saveSnaptShoot():void{
+			onSave();
+		}
+
+		private function onSave(me:MouseEvent = null):void {
+			var photoModel:PhotoModel = PhotoModel.instance()
+			photoModel.photo(gameOverPanel.snapShotArea, gameOverPanel.width, gameOverPanel.height)
+			photoModel.uploadPic(uploadUrl, sharComplete)
+		}
+
+		private function resetgame():void {
+			state = "MENU"
+			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
+			if(gameOverPanel){
+				gameOverPanel.visible = false;
+			}
+			ExternalInterface.call(logFunc,'resetgame in flash')
 		}
 		
 		private function initUI():void {
@@ -90,20 +197,42 @@
 			markBoard = new MarksDis();
 			startBtn.x = (stage.stageWidth - startBtn.width) * .5;
 			startBtn.y = (stage.stageHeight - startBtn.height) * .5;
-			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			addChild(startBtn);
 			stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyDown);
 			stage.addEventListener(KeyboardEvent.KEY_UP,handleKeyUp);
-						
-			marks = 0;;
-			markBoard.x = 382.4;
+			
+			/*
+			stage.addEventListener(MouseEvent.MOUSE_OUT, onDeactivate);
+			stage.addEventListener(MouseEvent.MOUSE_OVER,onActivate);
+			*/					
+			marks = 0;
+			markBoard.y = 10;
+			markBoard.x = StageWidth - markBoard.width - 10;
 			addChild(markBoard);
+
+			initPlayer();
+
+		}
+
+		private function initPlayer():void {
+			// TODO Auto Generated method stub
+			player = new Player();
+			player.visible = false;
+			playerLayer.addChild(player);
+		}
+		
+		private function onDeactivate(me:MouseEvent):void {
+			state = 'DEACTIVATE';
+		}
+		
+		private function onActivate(me:MouseEvent):void {
+			state = 'GAME';
 		}
 		
 		public function set marks(value:int):void {			
 			_marks = value;
 			trace(_marks)
-			txt.text = _marks+'';
+			updateDatas();
 			markBoard.total.text = _marks + '';
 		}
 		
@@ -111,9 +240,11 @@
 			return _marks;
 		}
 		
-		private function onStartBtnHandler(event:MouseEvent = null):void
-		{
+		private function onStartBtnHandler(event:MouseEvent = null):void {
 			// TODO Auto-generated method stub
+			if(!ExternalInterface.call(gameStartCall)){
+				return;
+			}
 			curLevel = -1;
 			startBtn.visible = false;
 			player.visible = true;
@@ -136,26 +267,26 @@
 			playerEffectLayer.addChild(effectBitmap)
 			bg.gotoAndPlay(2);
 			player.gotoAndPlay(2)
+			if(gameOverPanel) {
+				gameOverPanel.visible = false;
+			}
 			this.emptyBitmap = new BitmapData(stage.width,200,true,0);
-
+			
 		}
 
 		private function onPurse(me:MouseEvent):void {
-			markBoard['purseBtn'].visible = false;
 			if(state == 'PAURSE'){
 				state = 'GAME';
 				markBoard['purseBtn'].gotoAndStop(1)
+				_isGoLeft = _isGoRight = false;
 			}
 			else if(state == 'GAME'){
 				state = 'PAURSE';
 				markBoard['purseBtn'].gotoAndStop(2)
 			}
-			markBoard['purseBtn'].visible = true;
-
 		}
 		
-		protected function handleKeyUp(event:KeyboardEvent):void
-		{
+		protected function handleKeyUp(event:KeyboardEvent):void {
 			// TODO Auto-generated method stub
 			switch(event.keyCode){
 				// <-
@@ -172,8 +303,7 @@
 
 		private var _eff_elapse:int = 0;
 
-		protected function handleKeyDown(event:KeyboardEvent):void
-		{
+		protected function handleKeyDown(event:KeyboardEvent):void {
 			// TODO Auto-generated method stub
 			// _isGoRight = _isGoLeft = false;
 			switch(event.keyCode){
@@ -214,13 +344,13 @@
 			_dropsHolder = null;
 			player.visible = false;
 			startBtn.visible = true;
-			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
+			//startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			playerEffectLayer.removeChild(effectBitmap)
-			state = 'MENU';
+			state = '';
+			ExternalInterface.call(gameOverCall, marks);
 		}
 
-		protected function onGameLoop():void
-		{
+		protected function onGameLoop():void {
 			// TODO Auto-generated method stub
 			var r:Number = Math.random();
 			t2 = getTimer() - t1;
@@ -242,17 +372,14 @@
 				t3 = 0;
 			}
 			
-			//up grade
-			updateDatas();
-
 			updateDrops();
 			updateplayer();
-
+			/*
 			if( _eff_elapse > 0 && eff_duration > 50){
 				updateEffect();
 				eff_duration = 0;
 				eff_elapse --;
-			}
+			}*/
 		}
 
 		private function set eff_elapse (value:int):void {
@@ -261,7 +388,7 @@
 			effectBitmap.bitmapData = emptyBitmap.clone();
 		}
 		
-		private function get eff_elapse():int{
+		private function get eff_elapse():int {
 			return _eff_elapse;
 		}
 		
@@ -302,9 +429,7 @@
 		}
 		
 		private var addMark:AddMark
-		private function updateDrops():void
-		{
-			// TODO Auto Generated method stub
+		private function updateDrops():void {
 			var drop:Drops
 			var i:int
 			for(i = _dropLists.length-1; i >= 0; i--){
@@ -343,14 +468,12 @@
 			
 		}
 		
-		private function gameOver():void
-		{
+		private function gameOver():void {
 			// TODO Auto Generated method stub
 			state = 'GAMEOVER';
 		}
 		
-		private function genDrops():void
-		{
+		private function genDrops():void {
 			// TODO Auto Generated method stub
 			var type:uint = 1 + Math.random()*3;
 			var min_v:Number = v0 - v_range;
@@ -361,8 +484,7 @@
 			_dropLists.push(drop);
 		}
 		
-		private function updateplayer():void
-		{
+		private function updateplayer():void {
 			// TODO Auto Generated method stub
 			if(_isGoLeft){
 				player.x -= dx;
@@ -373,14 +495,14 @@
 				if(player['lxMc'])player['lxMc'].scaleX = -1;
 			}
 			//	80 为人物宽度
-			player.x = Math.max(0, Math.min(player.x, 488 - 80));
+			player.x = Math.max(10, Math.min(player.x, StageWidth - 100));
 		}
 
 		//private var myColorTransform:ColorTransform = new ColorTransform(250, 255, 255, 0.5, 25, 187 , 250, 0);
 		private var myColorTransform:ColorTransform = new ColorTransform(250, 255, 255, .4, 0, 0, 187, 1);
 		private var canvas:BitmapData;
 		private var emptyBitmap:BitmapData;
-		private var rect:Rectangle = new Rectangle(0,0, 488, 200);
+		private var rect:Rectangle = new Rectangle(0,0, StageWidth, 200);
 		private var matrix:Matrix = new Matrix(1, 0, 0, 1, 0, -200);
 		private var p:Point = new Point(0,0)
 		private function updateEffect():void {

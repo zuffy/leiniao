@@ -31,7 +31,7 @@
 			addChild(getObj(t_type));
 			activateY = t_activateY - this.height*.5;
 			deactivateY = t_deactivateY - this.height*.5;
-			this.x = Math.min(Math.random() * rangeX, stageW-this.width);
+			this.x = Math.min(Math.random() * rangeX, stageW-this.width - 20);
 			this.state = ALIVE;
 		}
 		
@@ -43,11 +43,11 @@
 			}
 			else{
 				var txt:MovieClip;
-				var ind:int = 1 + Math.random()*17
+				var ind:int = 1 + Math.random()*16
 				sp = new Prop();
 				if(index == 1) {
 					txt = new PropNameW();
-					txt.y = 25;
+					txt.y = 18;
 				}
 				else {
 					txt = new PropNameY();

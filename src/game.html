@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"> 
+    <head>
+        <title></title>
+        <meta name="google" value="notranslate" />         
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <style type="text/css" media="screen"> 
+            html, body  { height:100%; }
+            body { margin:0; padding:0; overflow:auto; text-align:center; 
+                   background-color: #ffffff; }
+        </style>
+        <script type="text/javascript" src="swfobject.js"></script>
+        <script type="text/javascript">
+            // For version detection, set to min. required Flash Player version, or 0 (or 0.0.0), for no version detection. 
+            var swfVersionStr = "11.4.0";
+            // To use express install, set to playerProductInstall.swf, otherwise the empty string. 
+            var xiSwfUrlStr = "playerProductInstall.swf";
+            var flashvars = {};
+            var params = {};
+            params.quality = "high";
+            params.bgcolor = "#ffffff";
+            params.allowscriptaccess = "always";
+            params.allowfullscreen = "true";
+            var attributes = {};
+            attributes.id = "gameSwf";
+            attributes.name = "gameSwf";
+            attributes.align = "left";
+            swfobject.embedSWF(
+                "leiniao.swf", "gameSwf", 
+                "100%", "100%", 
+                swfVersionStr, xiSwfUrlStr, 
+                flashvars, params, attributes);
+            // JavaScript enabled so display the flashContent div in case it is not replaced with a swf object.
+            swfobject.createCSS("#gameSwf", "display:block;text-align:left;");
+        </script>
+    </head>
+        <body>
+        <div style="width:850px;height:474px">
+            <div id="gameSwf"></div>
+        </div>
+        <div>
+            <a id="restart">重新开始</a>
+        </div>
+        <script type="text/javascript">
+
+        /**
+         * flash 内部接口, 第一次调用接口前需要判断接口是否可用
+         * -setParam(obj) 设置基本参数
+         *  obj:
+         *    {
+         *      uploadUrl 截图上传路径 
+         *      gameStartCall 开始游戏的回调函数
+         *      gameOverCall  GameOver的回调函数
+         *      sharPanelCloseCall 分享面板直接关闭
+         *      startShare  开始上传截图
+         *      snapUploadComplete   截图上传后回调函数
+         *      logFunc   日志函数
+         *    }
+         *
+         * -showShanePanel(score, times) 设置显示列表
+         *  score:String    用于分享面板显示的分数
+         *  times:String    抽奖机会
+         *
+         *  -saveSnaptShoot() 保存截图
+         *
+         *  -resetgame() 重置游戏
+         *
+         */
+
+
+        /**
+         * 用于flash打印日志
+         * @msg: 日志内容
+         */
+        function debug(msg){
+            console.log(msg)
+        }
+
+        /*
+        * 获取 flash 对象;
+        * @movieName: flash输入的name;
+        */
+        function findSWF(movieName) {
+          if (navigator.appName.indexOf("Microsoft")!= -1) {
+            return window[movieName];
+          } else {
+            return document[movieName];
+          }
+          return document.getElementById(movieName)
+        }
+        
+        /**
+         * 分享按钮点击的回调函数，此时截图开始上传
+         * @fromBtn 来源按钮 Qzone / Sina / Renren / Tqq
+         */
+        function startShare(fromBtn) {
+            console.log(fromBtn)
+            switch(fromBtn){
+                case 'douban':
+                    break;
+                case 'sina':
+                    break;
+                case 'renren':
+                    break;
+                case 'tengxun':
+                    break;
+                default:break;
+            }
+
+            // js 调用上传截图
+            var swf = findSWF("gameSwf");
+            swf.saveSnaptShoot();
+        }
+
+        /**
+         * sharPanelCloseCall 关闭面板, 一般需要重设游戏, 好让游戏重新开始
+         */
+        function sharPanelCloseCall(obj) {
+            var swf = findSWF("gameSwf");
+            swf.resetgame()
+            console.log('sharPanelCloseCall reset game')
+        }
+
+        /**
+         * swf.showShanePanel 上传图片后的回调函数
+         * @obj ：服务器返回的json格式数据
+         */
+        function sharComplete(obj) {
+            console.log(obj);
+            return;
+            var ret = obj.ret;
+            var url = obj.retUrl;
+            if(ret == 0){
+                alert('ok')
+            }
+            else {
+                alert('false')
+            }
+        }
+
+        /**
+         * 游戏开始前 的 响应函数
+         */
+        var times = 3;
+        function onGameStart() {
+            debug('gameStart')
+            if(times-- > 0)
+                return true;
+            else 
+                return false;
+        }
+
+        /**
+         * 游戏结束 
+         * @score 游戏分数
+         */
+        function onGameOver(score) {
+            debug('gameOver get score:' + score);
+
+            // 设置弹出面板
+            setTimeout(function(){
+                var swf = findSWF("gameSwf");
+                swf.showShanePanel('51255', '2')
+            }, 500)
+        }
+        
+
+        // test
+        setTimeout(function(){
+            var obj = {};
+            obj.uploadUrl = "http://xunlei.com/upload.php"  // 上传路径
+            obj.startShare = "startShare"                   // 截图开始上传的回调函数
+            obj.sharPanelCloseCall = "sharPanelCloseCall"   // 截图开始上传的回调函数
+            obj.snapUploadComplete = "sharComplete"         // 截图上传后回调函数，用于页面调用分享接口
+            obj.gameStartCall = "onGameStart"               // 游戏开始回调函数, 如果返回false则中断游戏
+            obj.gameOverCall = "onGameOver"                       // 游戏结束回调函数
+            obj.logFunc = 'debug'                           // 日志函数
+            
+            var swf = findSWF("gameSwf");
+            // 需轮询监听setParam是否存在
+            if(swf && swf.setParam){
+                swf.setParam(obj)
+            }
+            else{
+                console.log('内部方法未注册完毕')
+            }
+        },1000)
+
+        // 上传部分
+        var btn = document.getElementById('restart');
+            
+        btn.onclick = function() {
+            var swf = findSWF("gameSwf");
+            if(swf && swf.resetgame)
+                swf.resetgame()
+            else{
+                console.log('内部方法未注册完毕')
+            }
+        }
+        </script>
+    </body>
+</html>

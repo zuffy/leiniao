@@ -44,13 +44,17 @@
 			
 			picData_1 = new BitmapData(w,h,true,0);
 			picData_1.draw(p1);
-			/*var b:Bitmap = new Bitmap(picData_1)
-			b.x = 30
-			b.y = 30
-			p1.stage.addChild(b)*/
+			/** test
+				var b:Bitmap = new Bitmap(picData_1)
+				b.x = w
+				b.y = h
+				p1.stage.addChild(b)
+				ExternalInterface.call('console.log','add '+w+'pic:'+h)
+			//*/
 		}
 		
 		public function save():void {
+			return;
 			var avaimgdata:Boolean = true;
 			if (avaimgdata) {
 				var imagebyte:ByteArray
@@ -81,6 +85,10 @@
 		private var _uploadRet:Function
 		public function uploadPic(url:String, callback:Function):void {
 			_uploadRet = callback;
+			/** test
+				callback({'ret':'hi~'})
+				return;
+			//*/
 			/**创建图片对应的字节流**/  
 			var pngStream:ByteArray = PNGEncoder.encode(picData_1);  
 			

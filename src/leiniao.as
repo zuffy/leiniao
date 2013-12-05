@@ -18,7 +18,11 @@
 	import flash.display.StageScaleMode;
 	import flash.external.ExternalInterface;
 	import flash.display.StageAlign;
+	import flash.utils.setTimeout;
+	import flash.utils.clearTimeout;
 	import com.zuffy.model.PhotoModel;
+	import com.zuffy.model.DataList;
+	import com.greensock.TweenLite;
 
 	
 	public class leiniao extends Sprite	{
@@ -36,14 +40,15 @@
 		private var t2:Number = 0;
 		private var t3:Number = 0;
 		private var eff_duration:Number = 0;
+		private var playedTime:Number = 0;
 
 		private var genDropsDuration:Number = 1000;
 		// level
-		private var levelPoints:Array = [500, 900, 1800]
-		private var speedRang:Array = [2.8, 2.4, 2, 1];
-		private var born_duration:Array = [600, 400, 300, 200]
-		private var born_speed:Array = [6, 6.5, 7.5, 10]
-		private var move_speed:Array = [10, 12, 14, 16]
+		private var levelPoints:Array = [500, 900, 1800, 2800, 4000, 5000]
+		private var speedRang:Array = [2.8, 2.4, 2, 1, 0.5, 0.4, 0]
+		private var born_duration:Array = [600, 400, 300, 200, 100, 90, 50]
+		private var born_speed:Array = [6, 6.5, 7.5, 10, 12, 14, 18]
+		private var move_speed:Array = [10, 12, 14, 16, 17, 18, 18]
 		private var startDropDuration:Number = 0 	// 3s
 		private var curLevel:int = -1;
 		private var dx:Number = 10;
@@ -56,37 +61,60 @@
 		private var v_range:Number = 2.5 // 道具下落的差异速度
 
 		private var playerLayer:Sprite = new Sprite();
+		private var objsLayer:Sprite = new Sprite();
 		private var playerEffectLayer:Sprite = new Sprite();
 		private var effectBitmap:Bitmap;
 
 		private const StageWidth:Number = 850;
 		private const StageHeight:Number = 474;
+		
+		private var turnOtherSide:Boolean = false;
 
 
 		private var state:String = "MENU";
 
 		private var txt:TextField = new TextField();
 		var ttt:TextFormat = new TextFormat();
+		private var ctrlTip:Tip;
+
+		private var rankBtn:RankBtn;
+		private var rank:Sprite;
 
 		public function leiniao() {
 			Security.allowDomain("*");  
 			Security.allowInsecureDomain("*");
+
 			if(stage){
-				init();
+				stage_init();
 			}
 			else {
-				addEventListener(Event.ADDED_TO_STAGE, init)
+				addEventListener(Event.ADDED_TO_STAGE, stage_init)
 			}
 			
 		}
-		private function init(e:Event = null):void {
-			if(e){
-				removeEventListener(Event.ADDED_TO_STAGE, init)
-			}
+
+		private function stage_init(e:Event = null):void {
 			stage.scaleMode = StageScaleMode.NO_SCALE;
 			stage.align = StageAlign.TOP_LEFT;
 			stage.tabChildren = false;
-			
+			removeEventListener(Event.ADDED_TO_STAGE, stage_init)
+
+			if(stage.stageWidth == 0 || stage.stageHeight == 0) {
+				stage.addEventListener(Event.RESIZE, on_stage_RESIZE);
+			}
+			else {
+				init();
+			}
+		}
+
+		private var logTxt:TextField = new TextField();
+		private function on_stage_RESIZE(e:Event = null):void {
+			if(stage.stageWidth > 0 && stage.stageHeight > 0) {
+				stage.removeEventListener(Event.RESIZE, on_stage_RESIZE);
+				init();
+			}
+		}
+		private function init():void {
 			initJS();
 			initUI();
 			/* test
@@ -100,11 +128,17 @@
 		private function initJS():void {
 			if (ExternalInterface.available) {
 				ExternalInterface.addCallback('setParam', setParam);
+				ExternalInterface.addCallback('setList', setList);
 				ExternalInterface.addCallback('showShanePanel', showShanePanel);
 				ExternalInterface.addCallback('saveSnaptShoot', saveSnaptShoot);
+				ExternalInterface.addCallback('saveRankSnaptShoot', saveRankSnaptShoot);
 				ExternalInterface.addCallback('resetgame', resetgame);
 			}
 
+		}
+
+		private function setList(lists:Array):void {
+			DataList.instance.setData(lists);
 		}
 
 		private var uploadUrl:String = '';
@@ -113,67 +147,102 @@
 		private var startShare:String;
 		private var sharPanelCloseCall:String;		
 		private var snapUploadComplete:String;
+		private var showRankHandlerFunc:String;
+
 		private var logFunc:String;
 
+		private var snaptShootWdith:Number = 260;
+		private var snaptShootHeight:Number = 315;
+		private var showMoreFunc:String;
+
 		private function setParam(obj:Object):void {
+			snaptShootHeight = obj.height || snaptShootHeight
+			showMoreFunc = obj.showMoreFunc	// 显示更多按钮点击的回调函数
+
 			uploadUrl  = obj.uploadUrl  
 			gameStartCall = obj.gameStartCall
 			gameOverCall = obj.gameOverCall
 			sharPanelCloseCall = obj.sharPanelCloseCall
 			startShare = obj.startShare
       snapUploadComplete = obj.snapUploadComplete
+      showRankHandlerFunc = obj.showRankHandlerCall
 			logFunc = obj.logFunc
+
+			var funcName = obj.snapUploadComplete // 截图上传完毕
+			sharComplete = function __sharComplete(obj):void {
+					isSharing = false;
+					debug('snap Upload Complete')
+					ExternalInterface.call('' + funcName, obj)
+			}
+
+
 			startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
+
+			var dh:Number = snaptShootHeight - listHolder.y;
+			DataList.instance.setup(listHolder, showMoreFunc, snaptShootWdith, dh);
+			debug('ok startBtn.visible:'+startBtn.visible)
+			resetgame()
+			debug('resetgame')
 		}
 		
 		private var gameOverPanel:Panel;
 		private var sharComplete:Function;
+		private var rankSharComplete:Function;
 		private var isSharing:Boolean = false;
 		private function showShanePanel(score:String, times:String):void {
-			ExternalInterface.call(logFunc, '排名：'+score + '抽奖次数：'+times)
+			debug('排名：'+score + '抽奖次数：'+times)
 			if(!gameOverPanel){
 				gameOverPanel = new Panel();
 				gameOverPanel.close.addEventListener(MouseEvent.CLICK, closePanel)
 				gameOverPanel.again.addEventListener(MouseEvent.CLICK, onStartBtnHandler)
 				addChild(gameOverPanel)
-				gameOverPanel.btndouban.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
-				gameOverPanel.btnsina.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
-				gameOverPanel.btnrenren.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
-				gameOverPanel.btntengxun.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler);
-
-				sharComplete = function __sharComplete(obj):void {
+				gameOverPanel.btndouban.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(false));
+				gameOverPanel.btnsina.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(false));
+				gameOverPanel.btnrenren.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(false));
+				gameOverPanel.btntengxun.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(false));
+				/*
+				rankSharComplete = function __sharComplete(obj):void {
 					isSharing = false;
 					ExternalInterface.call('' + snapUploadComplete, obj)
-				}
+				}*/
 
 			}
 			gameOverPanel.visible = true;
-			gameOverPanel.snapShotArea.myScore.text = marks;
-			gameOverPanel.snapShotArea.myRank.text = score;
+			gameOverPanel.snapShotArea.myScore.text = marks + '分';
+			gameOverPanel.snapShotArea.myRank.text = score + '位';
 			gameOverPanel.snapShotArea.timesDis.text = times;
 			gameOverPanel.x = (StageWidth - gameOverPanel.width) * .5;
 			gameOverPanel.y = (StageHeight - gameOverPanel.height) * .5;
 		}
-		private function shareRankBtnClickHandler(me:MouseEvent):void {
-			// ExternalInterface.call(logFunc,'' + me.target.name.slice(3))
-			if(isSharing){
-				return;
+		private function shareRankBtnClickHandler(isFromRankList:Boolean):Function {
+			var func:Function = function __shareRankBtnClickHandler(me:MouseEvent):void {
+				debug('the btn:' + me.target.name.slice(3) + ' from rank list:'+isFromRankList + ' isSharing:'+isSharing)
+				if(isSharing){
+					return;
+				}
+				isSharing = true;
+				ExternalInterface.call(startShare, '' + me.target.name.slice(3), isFromRankList)
 			}
-			isSharing = true;
-			ExternalInterface.call(startShare, '' + me.target.name.slice(3))
+			return func;
 		}
+
 		private function closePanel(me:MouseEvent):void {
 			gameOverPanel.visible = false;
 			ExternalInterface.call(sharPanelCloseCall)
 		}
 		
+		private function saveRankSnaptShoot():void{
+			var photoModel:PhotoModel = PhotoModel.instance()
+			photoModel.photo(rank, rank.width, rank.height)
+			photoModel.uploadPic(uploadUrl, sharComplete)
+		}
 		private function saveSnaptShoot():void{
-			onSave();
+			onSaveGameOverTip();
 		}
 
-		private function onSave(me:MouseEvent = null):void {
+		private function onSaveGameOverTip(me:MouseEvent = null):void {
 			var photoModel:PhotoModel = PhotoModel.instance()
-			photoModel.photo(gameOverPanel.snapShotArea, gameOverPanel.width, gameOverPanel.height)
+			photoModel.photo(gameOverPanel.snapShotArea, 306, 67)
 			photoModel.uploadPic(uploadUrl, sharComplete)
 		}
 
@@ -183,15 +252,19 @@
 			if(gameOverPanel){
 				gameOverPanel.visible = false;
 			}
-			ExternalInterface.call(logFunc,'resetgame in flash')
+			isSharing = false;
+			debug('resetgame in flash')
 		}
+
 		
 		private function initUI():void {
 			addChild(bg);
 			playerLayer = new Sprite();
+			objsLayer = new Sprite();
 			playerEffectLayer = new Sprite();
 			addChild(playerEffectLayer)
 			addChild(playerLayer)
+			addChild(objsLayer)
 
 			startBtn = new StartBtn();
 			markBoard = new MarksDis();
@@ -200,7 +273,7 @@
 			addChild(startBtn);
 			stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyDown);
 			stage.addEventListener(KeyboardEvent.KEY_UP,handleKeyUp);
-			
+
 			/*
 			stage.addEventListener(MouseEvent.MOUSE_OUT, onDeactivate);
 			stage.addEventListener(MouseEvent.MOUSE_OVER,onActivate);
@@ -210,9 +283,75 @@
 			markBoard.x = StageWidth - markBoard.width - 10;
 			addChild(markBoard);
 
+			isSharing = false;
+
 			initPlayer();
 
+			initRank();
+
+			ctrlTip = new Tip();
+			ctrlTip.x = 15
+			ctrlTip.y = stage.stageHeight - ctrlTip.height - 15
+			addChild(ctrlTip)
+			/* **********log**********
+			logTxt.width = 500;
+			logTxt.height = 300;
+			logTxt.textColor = 0xffffff;
+
+			addChild(logTxt)
+			debug('stage:'+stage + ' height:'+stage.stageHeight)
+			*/
 		}
+
+		private var listHolder:Sprite;
+		private var rankbg:RankBG = new RankBG();
+		private function initRank():void {
+			rankBtn = new RankBtn();
+			rankBtn.x = stage.stageWidth - rankBtn.width;
+			rankBtn.y = stage.stageHeight - rankBtn.height;
+			rankBtn.buttonMode = true;
+			rankBtn.addEventListener(MouseEvent.MOUSE_OVER, onShowRankHandler)
+			addChild(rankBtn);
+
+			rank = new Sprite();
+			rank.addChild(rankbg)
+			rankbg.btndouban.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(true));
+			rankbg.btnsina.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(true));
+			rankbg.btnrenren.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(true));
+			rankbg.btntengxun.addEventListener(MouseEvent.CLICK, shareRankBtnClickHandler(true));
+
+			listHolder = new Sprite();
+			listHolder.x = 15;
+			listHolder.y = 60;
+			rank.x = stage.stageWidth;
+			rank.addChild(listHolder)
+			addChild(rank)
+		}
+		
+		private function onShowRankHandler(me:MouseEvent):void {
+			ExternalInterface.call(showRankHandlerFunc);
+			var todx:Number = stage.stageWidth - 250;
+			TweenLite.killTweensOf(rank);
+			TweenLite.to(rank, 0.3, { x: todx, onComplete:rankOnShow} );
+		}
+
+		private function rankOnShow():void {
+			//rank.addEventListener(MouseEvent.ROLL_OUT, rankOnHide)
+			stage.addEventListener(Event.ENTER_FRAME, testHide)
+		}
+		/*
+		private function rankOnHide(me:MouseEvent):void {
+				TweenLite.to(rank, 0.3, { x:stage.stageWidth, onComplete:function __():void {
+					rank.removeEventListener(MouseEvent.ROLL_OUT, rankOnHide)
+				}} );
+		}*/
+		private function testHide(e:Event):void {
+			if(mouseX < rank.x - 60){
+				stage.removeEventListener(Event.ENTER_FRAME, testHide)
+				TweenLite.to(rank, 0.3, { x:stage.stageWidth} );
+			}
+		}
+
 
 		private function initPlayer():void {
 			// TODO Auto Generated method stub
@@ -240,11 +379,19 @@
 			return _marks;
 		}
 		
+		private function hideCtrlTip():void {
+			var  timeoutID:int = setTimeout(function(){
+				ctrlTip.visible = false;
+				clearTimeout(timeoutID)
+			}, 2000)
+		}
+
 		private function onStartBtnHandler(event:MouseEvent = null):void {
 			// TODO Auto-generated method stub
 			if(!ExternalInterface.call(gameStartCall)){
 				return;
 			}
+			hideCtrlTip();
 			curLevel = -1;
 			startBtn.visible = false;
 			player.visible = true;
@@ -254,6 +401,7 @@
 			
 			marks = 0;
 			startDropDuration = 1000;
+			playedTime = 0;
 			state = "GAME";
 			startBtn.removeEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			stage.addEventListener(Event.ENTER_FRAME, loop);
@@ -261,7 +409,7 @@
 			markBoard.purseBtn.addEventListener(MouseEvent.CLICK, onPurse);
 			_dropLists = new Vector.<Drops>();
 			_dropsHolder = new Sprite();
-			addChild(_dropsHolder);			
+			objsLayer.addChild(_dropsHolder);			
 			effectBitmap = new Bitmap(new BitmapData(stage.width,200,true,0));
 			effectBitmap.y = 200
 			playerEffectLayer.addChild(effectBitmap)
@@ -291,9 +439,11 @@
 			switch(event.keyCode){
 				// <-
 				case 37:
+					turnOtherSide = false
 					_isGoLeft = false;
 					break;
 				case 39:
+					turnOtherSide = false
 					_isGoRight = false;
 					break;
 				default:break;
@@ -310,10 +460,12 @@
 				case 37:	// <-
 					_isGoLeft = true;
 					_eff_elapse = 30;
+					turnOtherSide = false
 					break;
 				case 39:	// ->
 					_eff_elapse = 30;
 					_isGoRight = true;
+					turnOtherSide = false
 					break;
 				case 32:
 					if(state == "MENU"){
@@ -339,7 +491,7 @@
 		
 		private function onGameOver ():void {
 			stage.removeEventListener(Event.ENTER_FRAME, loop);
-			removeChild(_dropsHolder)
+			objsLayer.removeChild(_dropsHolder)
 			_dropLists = null;
 			_dropsHolder = null;
 			player.visible = false;
@@ -347,16 +499,23 @@
 			//startBtn.addEventListener(MouseEvent.CLICK, onStartBtnHandler);
 			playerEffectLayer.removeChild(effectBitmap)
 			state = '';
-			ExternalInterface.call(gameOverCall, marks);
+			ExternalInterface.call(gameOverCall, marks, playedTime);
 		}
 
 		protected function onGameLoop():void {
 			// TODO Auto-generated method stub
 			var r:Number = Math.random();
 			t2 = getTimer() - t1;
+			if(t2 < 30) return;
+			if(t2 > 80){
+				t1 = getTimer();
+				return
+			};
+
 			t1 = getTimer();
 			t3 += t2
 			eff_duration += t2;
+			playedTime += t2;
 			if(startDropDuration > 0){
 				if(t3 < startDropDuration) {
 					return;
@@ -367,11 +526,10 @@
 				}
 			}
 
-			if(t3 > genDropsDuration){
+			if(t3 > genDropsDuration && _dropLists.length < 20){
 				genDrops();
 				t3 = 0;
 			}
-			
 			updateDrops();
 			updateplayer();
 			/*
@@ -395,8 +553,8 @@
 		private function getDataFromMark(t_mark:int):Object {
 			var obj = {};
 			var level:int = 0;
-			if(t_mark > 1800){
-				level = 3;
+			if(t_mark > 5000){
+				level = 6;
 			}
 			else if(t_mark <= 500){
 				level = 0
@@ -404,8 +562,17 @@
 			else if(t_mark <= 900){
 				level = 1
 			}
-			else{
+			else if(t_mark <= 1800){
 				level = 2
+			}
+			else if(t_mark <= 2800){
+				level = 3
+			}
+			else if(t_mark <= 4000){
+				level = 4
+			}
+			else{
+				level = 5
 			}
 			if(curLevel == level) return {};
 			obj.update = true;
@@ -488,12 +655,19 @@
 			// TODO Auto Generated method stub
 			if(_isGoLeft){
 				player.x -= dx;
-				if(player['lxMc'])player['lxMc'].scaleX = 1;
+				if(!turnOtherSide){
+					if(player['lxMc'])player['lxMc'].scaleX = 1;
+					turnOtherSide = true;
+				}
 			}
 			if(_isGoRight){
 				player.x += dx;
-				if(player['lxMc'])player['lxMc'].scaleX = -1;
+				if(!turnOtherSide){
+					if(player['lxMc'])player['lxMc'].scaleX = -1;
+					turnOtherSide = true;
+				}
 			}
+
 			//	80 为人物宽度
 			player.x = Math.max(10, Math.min(player.x, StageWidth - 100));
 		}
@@ -512,6 +686,13 @@
 			effectBitmap.bitmapData.dispose();
 			effectBitmap.bitmapData = emptyBitmap.clone();
 			effectBitmap.bitmapData.copyPixels(canvas, rect, p)
+		}
+
+
+		private function debug(str:String):void {
+			//logTxt && (logTxt.text = str);
+			ExternalInterface.call(logFunc, str)
+			//ExternalInterface.call('window.console.log', str)
 		}
 	}
 }

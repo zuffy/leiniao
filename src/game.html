@@ -12,13 +12,14 @@
         <script type="text/javascript" src="swfobject.js"></script>
         <script type="text/javascript">
             // For version detection, set to min. required Flash Player version, or 0 (or 0.0.0), for no version detection. 
-            var swfVersionStr = "11.4.0";
+            var swfVersionStr = "9";
             // To use express install, set to playerProductInstall.swf, otherwise the empty string. 
             var xiSwfUrlStr = "playerProductInstall.swf";
             var flashvars = {};
             var params = {};
             params.quality = "high";
             params.bgcolor = "#ffffff";
+            params.wmode = "window";
             params.allowscriptaccess = "always";
             params.allowfullscreen = "true";
             var attributes = {};
@@ -26,7 +27,7 @@
             attributes.name = "gameSwf";
             attributes.align = "left";
             swfobject.embedSWF(
-                "leiniao.swf", "gameSwf", 
+                "leiniao.swf?v=132", "gameSwf", 
                 "100%", "100%", 
                 swfVersionStr, xiSwfUrlStr, 
                 flashvars, params, attributes);
@@ -54,6 +55,7 @@
          *      sharPanelCloseCall 分享面板直接关闭
          *      startShare  开始上传截图
          *      snapUploadComplete   截图上传后回调函数
+         *      showMoreFunc  排行榜显示更多按钮回调
          *      logFunc   日志函数
          *    }
          *
@@ -62,6 +64,8 @@
          *  times:String    抽奖机会
          *
          *  -saveSnaptShoot() 保存截图
+         *
+         *  -saveRankSnaptShoot() 保存排行榜截图
          *
          *  -resetgame() 重置游戏
          *
@@ -74,6 +78,7 @@
          */
         function debug(msg){
             console.log(msg)
+            //alert(msg)
         }
 
         /*
@@ -92,9 +97,10 @@
         /**
          * 分享按钮点击的回调函数，此时截图开始上传
          * @fromBtn 来源按钮 Qzone / Sina / Renren / Tqq
+         * @isfromList 是否来源于排行榜
          */
-        function startShare(fromBtn) {
-            console.log(fromBtn)
+        function startShare(fromBtn, isfromList) {
+            debug(fromBtn)
             switch(fromBtn){
                 case 'douban':
                     break;
@@ -109,7 +115,10 @@
 
             // js 调用上传截图
             var swf = findSWF("gameSwf");
-            swf.saveSnaptShoot();
+            if(isfromList)
+              swf.saveRankSnaptShoot(); // 排行榜截图
+            else
+              swf.saveSnaptShoot(); //弹窗截图
         }
 
         /**
@@ -118,7 +127,7 @@
         function sharPanelCloseCall(obj) {
             var swf = findSWF("gameSwf");
             swf.resetgame()
-            console.log('sharPanelCloseCall reset game')
+            debug('sharPanelCloseCall reset game')
         }
 
         /**
@@ -126,7 +135,7 @@
          * @obj ：服务器返回的json格式数据
          */
         function sharComplete(obj) {
-            console.log(obj);
+            debug(obj);
             return;
             var ret = obj.ret;
             var url = obj.retUrl;
@@ -153,9 +162,10 @@
         /**
          * 游戏结束 
          * @score 游戏分数
+         * @playedTime 游戏时长
          */
-        function onGameOver(score) {
-            debug('gameOver get score:' + score);
+        function onGameOver(score, playedTime) {
+            debug('gameOver get score:' + score + ' playedTime:'+playedTime);
 
             // 设置弹出面板
             setTimeout(function(){
@@ -164,10 +174,52 @@
             }, 500)
         }
         
+        /**
+         * 显示更多按钮点击回调函数
+         * @j 返回的按钮在列表中的idex
+         */
+        function showMore(j) {
+            var arr = [];
+            for (var i = 0; i< 20; i++){
+                if(i==10){
+                    arr.push({isMoreBtn:true})
+                }
+                else 
+                    arr.push({id:i, uid:'xxx'+i, name:'test22试试'+i, mark:'12315465'});
+            }
+            
+            var swf = findSWF("gameSwf");
+            // 需轮询监听setParam是否存在
+            if(swf && swf.setList){
+                swf.setList(arr)
+            }
+            else{
+                debug('内部方法未注册完毕')
+            }
+        }
+        /**
+         * 显示排行榜
+         */
+        function showRank() {
+           debug('showRank')
+        }
+
 
         // test
         setTimeout(function(){
             var obj = {};
+            var arr = [];
+            for (var i = 0; i< 200; i++){
+                if(i==5){
+                    arr.push({isMoreBtn:true, addLine:true})
+                }
+                else 
+                    arr.push({id:i, uid:'xxx'+i, name:'test试试11'+i, mark:'123154分'});
+
+                if(i == 6){
+                    arr[i].color = 0xe9c278;
+                }
+            }
             obj.uploadUrl = "http://xunlei.com/upload.php"  // 上传路径
             obj.startShare = "startShare"                   // 截图开始上传的回调函数
             obj.sharPanelCloseCall = "sharPanelCloseCall"   // 截图开始上传的回调函数
@@ -175,14 +227,20 @@
             obj.gameStartCall = "onGameStart"               // 游戏开始回调函数, 如果返回false则中断游戏
             obj.gameOverCall = "onGameOver"                       // 游戏结束回调函数
             obj.logFunc = 'debug'                           // 日志函数
+            obj.showMoreFunc = "showMore"                       // 显示更多按钮点击回调函数
+            obj.showRankHandlerCall = "showRank"                       // 显示排行榜数据
             
+            obj.width = 250                                 // flash提交的截图宽度
+            obj.height = 446                                 // flash提交的截图高度
+
             var swf = findSWF("gameSwf");
             // 需轮询监听setParam是否存在
             if(swf && swf.setParam){
                 swf.setParam(obj)
+                swf.setList(arr)
             }
             else{
-                console.log('内部方法未注册完毕')
+                debug('内部方法未注册完毕')
             }
         },1000)
 
@@ -194,7 +252,7 @@
             if(swf && swf.resetgame)
                 swf.resetgame()
             else{
-                console.log('内部方法未注册完毕')
+                debug('内部方法未注册完毕')
             }
         }
         </script>
